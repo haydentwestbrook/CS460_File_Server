@@ -51,7 +51,6 @@ public class Client {
 	 * @return boolean -- true if connection worked, false if not
 	 *****************************************************************/
 	public boolean connect(String server, int port){
-		// connection to server
 		// convert server string to SocketAddress
 		Inet4Address serverIp = null;
 		System.out.print("Connecting to " + server + "...");
@@ -74,7 +73,7 @@ public class Client {
 		}
 
 		try { // setup input and output streams
-			this.inStream = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+			this.inStream = new BufferedReader(new InputStreamReader(this.socket.getInputStream(), "UTF-8"));
 			this.outStream = new DataOutputStream(this.socket.getOutputStream());
 		} catch (IOException e) {
 			System.out.println("Error: problem creating input and output streams on socket");
@@ -87,12 +86,48 @@ public class Client {
 
 	/***** get() *****************************************************
 	 * Where most of the work is done -- gets a file from the server
-	 * @param toServer InputStreamReader buffer that will be written to and sent to server. Contains GET <source dir>
-	 * @param sourceDir
-	 * @param destDir
+	 * @param sourceDir The file location on the server we are getting (This **MUST** exist on the server!!)
+	 * @param destDir the destination directory we are copying that file to
 	 * @return boolean
 	 *****************************************************************/
-	public boolean get(InputStreamReader toServer, String sourceDir, String destDir){
+	public boolean get(String sourceDir, String destDir){
+		// for now just get the buffer and dump it
+		try {
+			this.outStream.writeBytes("GET " + sourceDir + " \r\n"); // send command to server to get file
+			System.out.println("Input from server Dump:");
+			String line = this.inStream.readLine();					// read first line, which is basic response from server
+			System.out.println(line);
+			if (line.contains("DATA 200 OK")) {
+				// read next line and get content length
+				// then create a file of that length (?)
+				System.out.println("*** getting file length...***");
+				line = this.inStream.readLine();
+				System.out.println(line);
+
+				// parse line for length
+				int fileLength = 0;
+				for (String s : line.split(" ")) {
+					try {
+						fileLength = Integer.parseInt(s);
+					} catch (NumberFormatException e) {
+						continue;
+					}
+				}
+				if (fileLength == 0){
+					System.out.println("Error: file length was zero...no file retrieved ?");
+					return false;
+				}
+				System.out.println("Verify length: " + fileLength);
+			}
+			else { // DATA 404 was returned
+				System.out.println("Error getting file");
+				return false;
+			}
+		} catch (IOException e) {
+			System.out.println("Error: Problem with get method");
+			e.printStackTrace();
+			return false;
+		}
 		return true;
 	}
 
@@ -174,6 +209,15 @@ public class Client {
 				}
 			}
 
+			else if (inputArgs[0].equals("GET")) {
+				if (c == null || !c.isConnected()) {
+					System.out.println("You are not connected to the file server. Use OPEN <server> <port>");
+				}
+				else {
+					c.get(inputArgs[1], inputArgs[2]);
+				}
+
+			}
 			else if (inputArgs[0].equals("CLOSE")) {
 				// check that there is a connection to close first
 				if (c == null || !c.isConnected()) {
