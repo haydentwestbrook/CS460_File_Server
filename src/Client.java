@@ -38,13 +38,10 @@ public class Client {
 	 *****************************************************************/
 	public boolean isConnected(){
 		// tell if client is currently connected
-		if (this.socket == null) {
+		if (this.socket == null)
 			return false;
-		}
-		// TODO: make this if statement cleaner
-		else {
+		else
 			return !this.socket.isClosed();	// I have to use isClosed() because socket.isConnected() doesn't work right
-		}
 	}
 
 	/***** connect() *************************************************
@@ -175,7 +172,9 @@ public class Client {
 				if (!(c.connect(inputArgs[1], Integer.parseInt(inputArgs[2])))) {
 					System.out.println("Error connecting to server");
 				}
-			} else if (inputArgs[0].equals("CLOSE")) {
+			}
+
+			else if (inputArgs[0].equals("CLOSE")) {
 				// check that there is a connection to close first
 				if (c == null || !c.isConnected()) {
 					System.out.println("There is no open connection to close");
@@ -188,6 +187,14 @@ public class Client {
 						System.out.println("Connection closed");
 				}
 
+			}
+
+			else if (inputArgs[0].equalsIgnoreCase("exit")){
+				System.out.println("Exiting...");
+				// close connection
+				if (!(c == null) && c.isConnected())
+					c.close();
+				break;
 			}
 		}
 	}
