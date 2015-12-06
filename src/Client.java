@@ -1,6 +1,6 @@
 import java.io.*;
 import java.net.*;
-import java.util.Arrays;
+import java.nio.Buffer;
 import java.nio.file.*;
 import java.util.Scanner;
 
@@ -11,16 +11,17 @@ import java.util.Scanner;
  */
 
 public class Client {
-	private Socket socket;
-	private Path rootDir;
-	private boolean connected = false;
+	private Socket socket = null;
+	private BufferedReader inStream = null;			// stream to read from the server on
+	private DataOutputStream outStream = null;		// stream to write info to the server
+	private Path rootDir;							// the root directory where client will be storing files
 
+	/***** Constructor ***********************************************
+	 * Creates a client that will connect to FileServer instance
+	 * @param dir The root directory to store retrieved files
+	 * @throws FileNotFoundException
+	 *****************************************************************/
 	public Client(String dir) throws FileNotFoundException {
-		/**
-		 * Creates a client that will connect to FileServer instance
-		 * @param dir = The root directory to store retrieved files
-		 * @throws FileNotFoundException
-		 */
 		// first check if dir is actually a dir and exists
 		File rootFile = new File(dir);
 		if (!rootFile.exists()) {
@@ -31,23 +32,41 @@ public class Client {
 		this.rootDir = Paths.get(dir);
 	}
 
+	/***** isConnected() *********************************************
+	 *  Checks if connnection to server is currently active
+	 * @return boolean
+	 *****************************************************************/
 	public boolean isConnected(){
 		// tell if client is currently connected
-		return connected;
+		if (this.socket == null) {
+			return false;
+		}
+		// TODO: make this if statement cleaner
+		else {
+			return !this.socket.isClosed();	// I have to use isClosed() because socket.isConnected() doesn't work right
+		}
 	}
 
-	private boolean connect(String server, int port){
+	/***** connect() *************************************************
+	 * Makes TCP connection to server
+	 * @param server String server hostname (not sure if IP will work yet)
+	 * @param port int port number of server
+	 * @return boolean -- true if connection worked, false if not
+	 *****************************************************************/
+	public boolean connect(String server, int port){
 		// connection to server
 		// convert server string to SocketAddress
 		Inet4Address serverIp = null;
 		System.out.print("Connecting to " + server + "...");
 
-		// get the ip address object of what was passed in
-		try {
+		try { // get the ip address object of what was passed in
 			serverIp = (Inet4Address) Inet4Address.getByName(server);
 		} catch (UnknownHostException e) {
+			System.out.println("Error: failed to convert hostname to IP");
 			e.printStackTrace();
+			return false;
 		}
+
 		try{ // connect to the server using the ip address object
 			this.socket = new Socket(serverIp.getHostAddress(), port);
 		} catch (Exception e) {
@@ -56,14 +75,58 @@ public class Client {
 			e.printStackTrace();
 			return false;
 		}
+
+		try { // setup input and output streams
+			this.inStream = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
+			this.outStream = new DataOutputStream(this.socket.getOutputStream());
+		} catch (IOException e) {
+			System.out.println("Error: problem creating input and output streams on socket");
+			e.printStackTrace();
+			return false;
+		}
 		System.out.println("SUCCESS");
-		this.connected = true;
 		return true;
 	}
 
-	/**********************************************************
+	/***** get() *****************************************************
+	 * Where most of the work is done -- gets a file from the server
+	 * @param toServer InputStreamReader buffer that will be written to and sent to server. Contains GET <source dir>
+	 * @param sourceDir
+	 * @param destDir
+	 * @return boolean
+	 *****************************************************************/
+	public boolean get(InputStreamReader toServer, String sourceDir, String destDir){
+		return true;
+	}
+
+	/***** close() ***************************************************
+	 * Closes the TCP connection to the server gracefully by sending a CLOSE command to the server before
+	 * doing this.socket.close() command. This is because the server will error out due to the connection being null
+	 * if we do a close without the server knowing.
+	 * @return boolean
+	 *****************************************************************/
+	public boolean close(){
+		// tell server to close and clear out all socket info
+		try {
+			this.outStream.writeBytes("CLOSE");
+			this.socket.close();
+			this.inStream.close();
+			this.outStream.close();
+			// added these null statements because this function wasn't closing properly with just the above 4 lines
+			this.socket = null;
+			this.inStream = null;
+			this.outStream = null;
+		} catch (IOException e) {
+			System.out.println("Error: writing CLOSE command to server buffer failed");
+			e.printStackTrace();
+			return false;
+		}
+		return true;
+	}
+
+	/*****************************************************************
 	 * MAIN
-	 **********************************************************/
+	 *****************************************************************/
 	public static void main(String[] args) {
 		// Check argument passed in by user. args[0] should be local root directory for client.
 		if (args.length > 1 || args.length == 0){
@@ -97,9 +160,9 @@ public class Client {
 			// end debugging
 
 			// get option from user input
-			if (inputArgs[0].equals("OPEN")){
+			if (inputArgs[0].equals("OPEN")) {
 				// check user input arg length
-				if (inputArgs.length != 3){
+				if (inputArgs.length != 3) {
 					System.out.println("Error: Too many arguments for OPEN\n");
 					continue;
 				}
@@ -111,15 +174,22 @@ public class Client {
 				// connect to the server
 				if (!(c.connect(inputArgs[1], Integer.parseInt(inputArgs[2])))) {
 					System.out.println("Error connecting to server");
-					continue;
 				}
-			}
-			try {
-				BufferedReader fromServer = new BufferedReader(new InputStreamReader(c.socket.getInputStream()));
-				DataOutputStream toServer = new DataOutputStream(c.socket.getOutputStream());
-			} catch (IOException e) {
-				e.printStackTrace();
+			} else if (inputArgs[0].equals("CLOSE")) {
+				// check that there is a connection to close first
+				if (c == null || !c.isConnected()) {
+					System.out.println("There is no open connection to close");
+				}
+
+				else {
+					if (!c.close())
+						System.out.println("Error closing connection to server");
+					else
+						System.out.println("Connection closed");
+				}
+
 			}
 		}
 	}
+
 }
