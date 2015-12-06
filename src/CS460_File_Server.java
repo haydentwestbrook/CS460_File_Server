@@ -9,7 +9,8 @@ import java.util.Arrays;
 public class CS460_File_Server {
 
     public static int PORT_NUMBER = 23657;
-    public static String root = "/home/hayden/Desktop/";
+    //public static String root = "/home/hayden/Desktop/";
+	public static String root = "G:\\Desktop\\file_server";
 
     public static void main(String[] args) {
 
@@ -30,7 +31,8 @@ public class CS460_File_Server {
 
         System.out.println("Accepted client.");
         BufferedReader fromClient = new BufferedReader(new InputStreamReader(client.getInputStream()));
-        DataOutputStream toClient = new DataOutputStream(client.getOutputStream());
+        //DataOutputStream toClient = new DataOutputStream(client.getOutputStream());
+		PrintStream toClient = new PrintStream(client.getOutputStream());
 
         while(true) {
             String[] response = fromClient.readLine().split(" ");
@@ -45,6 +47,7 @@ public class CS460_File_Server {
 
             if (command.equals("GET")) {
                 getFile(args, toClient);
+				toClient.flush();
             }
             if (command.equals("CLOSE")) {
                 System.out.println("Closing connection.");
@@ -54,22 +57,24 @@ public class CS460_File_Server {
         }
     }
 
-    private static void getFile(String[] args, DataOutputStream toClient) throws Exception {
+    private static void getFile(String[] args, PrintStream toClient) throws Exception {
         System.out.println("Getting file: " + root + args[0]);
 
         File file = new File(root + args[0]);
         try {
             FileInputStream fileStream = new FileInputStream(file);
-            toClient.writeChars("DATA 200 OK \r\ncontent-length: " + fileStream.available() + "\r\n");
-            int data;
+            toClient.print("DATA 200 OK \r\ncontent-length: " + fileStream.available() + "\r\n");
+            /*int data;
             while((data = fileStream.read()) != -1) {
                 toClient.write(data);
-            }
+            }*/
+			fileStream.close();
+			toClient.flush();
             System.out.println("File sent successfully.");
 
         } catch(Exception e) {
             System.out.println("File not found.");
-            toClient.writeChars("DATA 404 Not found \r\n");
+            toClient.print("DATA 404 Not found \r\n");
         }
     }
 }
