@@ -9,6 +9,8 @@ import java.util.Arrays;
 public class CS460_File_Server {
 
     public static int PORT_NUMBER = 23657;
+	public static int MAX_BYTES = 1024*64;	// max bytes to be able to send at once over socket
+
     //public static String root = "/home/hayden/Desktop/";
 	public static String root = "G:\\Desktop\\file_server";
 
@@ -31,8 +33,7 @@ public class CS460_File_Server {
 
         System.out.println("Accepted client.");
         BufferedReader fromClient = new BufferedReader(new InputStreamReader(client.getInputStream()));
-        //DataOutputStream toClient = new DataOutputStream(client.getOutputStream());
-		PrintStream toClient = new PrintStream(client.getOutputStream());
+		DataOutputStream toClient = new DataOutputStream(client.getOutputStream());
 
         while(true) {
             String[] response = fromClient.readLine().split(" ");
@@ -57,24 +58,25 @@ public class CS460_File_Server {
         }
     }
 
-    private static void getFile(String[] args, PrintStream toClient) throws Exception {
+    private static void getFile(String[] args, DataOutputStream toClient) throws Exception {
         System.out.println("Getting file: " + root + args[0]);
 
         File file = new File(root + args[0]);
         try {
             FileInputStream fileStream = new FileInputStream(file);
-            toClient.print("DATA 200 OK \r\ncontent-length: " + fileStream.available() + "\r\n");
-            /*int data;
-            while((data = fileStream.read()) != -1) {
-                toClient.write(data);
-            }*/
+			toClient.write(("DATA 200 OK \r\ncontent-length: " + fileStream.available() + "\r\n").getBytes());
+			byte[] sBytes = new byte[fileStream.available()];
+			int fileLength = -1;
+            while((fileLength = fileStream.read(sBytes)) != -1) {
+                toClient.write(sBytes, 0, fileLength);
+            }
+
 			fileStream.close();
-			toClient.flush();
             System.out.println("File sent successfully.");
 
         } catch(Exception e) {
             System.out.println("File not found.");
-            toClient.print("DATA 404 Not found \r\n");
+            toClient.write(("DATA 404 Not found \r\n").getBytes());
         }
     }
 }
