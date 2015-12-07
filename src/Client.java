@@ -1,7 +1,9 @@
 import java.io.*;
 import java.net.*;
 import java.nio.Buffer;
+import java.nio.charset.Charset;
 import java.nio.file.*;
+import java.util.Arrays;
 import java.util.Scanner;
 
 /**
@@ -11,8 +13,9 @@ import java.util.Scanner;
  */
 
 public class Client {
+	public static int MAX_BYTES = 1024*64;
 	private Socket socket = null;
-	private BufferedReader inStream = null;			// stream to read from the server on
+	private byte[] inStream = null;			// stream to read from the server on
 	private DataOutputStream outStream = null;		// stream to write info to the server
 	private Path rootDir;							// the root directory where client will be storing files
 
@@ -72,8 +75,8 @@ public class Client {
 			return false;
 		}
 
-		try { // setup input and output streams
-			this.inStream = new BufferedReader(new InputStreamReader(this.socket.getInputStream(), "UTF-8"));
+		try { // setup output stream
+			this.inStream = new byte[MAX_BYTES];
 			this.outStream = new DataOutputStream(this.socket.getOutputStream());
 		} catch (IOException e) {
 			System.out.println("Error: problem creating input and output streams on socket");
@@ -92,32 +95,46 @@ public class Client {
 	 *****************************************************************/
 	public boolean get(String sourceDir, String destDir){
 		// for now just get the buffer and dump it
+
 		try {
 			this.outStream.writeBytes("GET " + sourceDir + " \r\n"); // send command to server to get file
-			System.out.println("Input from server Dump:");
-			String line = this.inStream.readLine();					// read first line, which is basic response from server
-			System.out.println(line);
-			if (line.contains("DATA 200 OK")) {
-				// read next line and get content length
-				// then create a file of that length (?)
-				System.out.println("*** getting file length...***");
-				line = this.inStream.readLine();
-				System.out.println(line);
+			this.socket.getInputStream().read(this.inStream, 0, this.inStream.length);	// read bytes from server
 
+			// get header information
+			String headerStr = new String(this.inStream, Charset.forName("UTF-8"));
+			String[] headerStrArray = headerStr.split("\r\n");
+
+			// parse header information and write the file
+			if (headerStrArray[0].contains("DATA 200 OK")) {
 				// parse line for length
 				int fileLength = 0;
-				for (String s : line.split(" ")) {
+				for (String s : headerStrArray[1].split(" ")) {
 					try {
 						fileLength = Integer.parseInt(s);
 					} catch (NumberFormatException e) {
-						continue;
+						continue;	// keep going if result is not a number
 					}
 				}
-				if (fileLength == 0){
+				if (fileLength == 0){ // if fileLength is still 0, either no file was retrieved or problem with header
 					System.out.println("Error: file length was zero...no file retrieved ?");
 					return false;
 				}
-				System.out.println("Verify length: " + fileLength);
+				else { // fileLength was some positive number so we can make a file
+					this.socket.getInputStream().read(this.inStream, 0, fileLength);	// read bytes from server into inStream
+					byte[] tmp = Arrays.copyOf(this.inStream, fileLength);				// copy part of inStream to tmp buffer
+
+					// write the file
+					String fileAbsPath = this.rootDir + destDir;	// construct the destination path string
+					Path filePath = Paths.get(fileAbsPath);			// convert string to Path object to make a file
+					try {
+						Files.write(filePath, tmp);					// write the file
+						System.out.println("File copied successfully");
+					} catch (Exception e){
+						System.out.println("Error: Problem writing file");
+						e.printStackTrace();
+						return false;
+					}
+				}
 			}
 			else { // DATA 404 was returned
 				System.out.println("Error getting file");
@@ -142,7 +159,6 @@ public class Client {
 		try {
 			this.outStream.writeBytes("CLOSE");
 			this.socket.close();
-			this.inStream.close();
 			this.outStream.close();
 			// added these null statements because this function wasn't closing properly with just the above 4 lines
 			this.socket = null;
@@ -184,13 +200,6 @@ public class Client {
 			inputStr = in.nextLine();
 			String[] inputArgs = inputStr.split(" ");
 
-			// *** debugging ***
-			/*for (String arg : inputArgs){
-				System.out.print(arg + " ");
-			}
-			System.out.println("");*/
-			// end debugging
-
 			// get option from user input
 			if (inputArgs[0].equals("OPEN")) {
 				// check user input arg length
@@ -204,7 +213,14 @@ public class Client {
 					continue;
 				}
 				// connect to the server
-				if (!(c.connect(inputArgs[1], Integer.parseInt(inputArgs[2])))) {
+				int port = 0;
+				try { // check that user entered a number and not text as port number
+					port = Integer.parseInt(inputArgs[2]);
+				} catch (NumberFormatException e) {
+					System.out.println("Error: port argument must be a number");
+					continue;
+				}
+				if (!(c.connect(inputArgs[1], port))) {
 					System.out.println("Error connecting to server");
 				}
 			}
@@ -215,9 +231,10 @@ public class Client {
 				}
 				else {
 					c.get(inputArgs[1], inputArgs[2]);
+					Arrays.fill(c.inStream, (byte)0);
 				}
-
 			}
+
 			else if (inputArgs[0].equals("CLOSE")) {
 				// check that there is a connection to close first
 				if (c == null || !c.isConnected()) {
@@ -230,7 +247,6 @@ public class Client {
 					else
 						System.out.println("Connection closed");
 				}
-
 			}
 
 			else if (inputArgs[0].equalsIgnoreCase("exit")){
