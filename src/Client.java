@@ -118,7 +118,7 @@ public class Client {
 						continue;	// keep going if result is not a number
 					}
 				}
-				System.out.println("Original File Length: " + fileLength);
+
 				if (fileLength == 0){ // if fileLength is still 0, either no file was retrieved or problem with header
 					System.out.println("Error: file length was zero...no file retrieved ?");
 					return false;
