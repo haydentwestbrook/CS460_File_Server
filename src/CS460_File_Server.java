@@ -9,7 +9,7 @@ import java.util.Arrays;
 public class CS460_File_Server {
 
     public static int PORT_NUMBER = 23657;
-	public static int MAX_BYTES = 1024*64;	// max bytes to be able to send at once over socket
+	public static int MAX_BYTES = 1024*100;	// max bytes to be able to send at once over socket
 
     //public static String root = "/home/hayden/Desktop/";
 	public static String root = "G:\\Desktop\\file_server";
@@ -65,9 +65,9 @@ public class CS460_File_Server {
         try {
             FileInputStream fileStream = new FileInputStream(file);
 			toClient.write(("DATA 200 OK \r\ncontent-length: " + fileStream.available() + "\r\n").getBytes());
-			byte[] sBytes = new byte[fileStream.available()];
-			int fileLength = -1;
-            while((fileLength = fileStream.read(sBytes)) != -1) {
+			byte[] sBytes = new byte[MAX_BYTES];
+			int fileLength;
+            while((fileLength = fileStream.read(sBytes)) > 0) {
                 toClient.write(sBytes, 0, fileLength);
             }
 

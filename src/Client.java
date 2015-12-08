@@ -13,10 +13,11 @@ import java.util.Scanner;
  */
 
 public class Client {
-	public static int MAX_BYTES = 1024*64;
+	public static int MAX_BYTES = 1024*100;
 	private Socket socket = null;
-	private byte[] inStream = null;			// stream to read from the server on
-	private DataOutputStream outStream = null;		// stream to write info to the server
+	private byte[] bytes = null;					// stream to temporarily store byte info from the server
+	private InputStream inStream = null;			// socket stream to read from server
+	private DataOutputStream outStream = null;		// socket stream to write info to the server
 	private Path rootDir;							// the root directory where client will be storing files
 
 	/***** Constructor ***********************************************
@@ -76,8 +77,9 @@ public class Client {
 		}
 
 		try { // setup output stream
-			this.inStream = new byte[MAX_BYTES];
+			this.bytes = new byte[MAX_BYTES];
 			this.outStream = new DataOutputStream(this.socket.getOutputStream());
+			this.inStream = this.socket.getInputStream();
 		} catch (IOException e) {
 			System.out.println("Error: problem creating input and output streams on socket");
 			e.printStackTrace();
@@ -94,20 +96,21 @@ public class Client {
 	 * @return boolean
 	 *****************************************************************/
 	public boolean get(String sourceDir, String destDir){
-		// for now just get the buffer and dump it
 
 		try {
 			this.outStream.writeBytes("GET " + sourceDir + " \r\n"); // send command to server to get file
-			this.socket.getInputStream().read(this.inStream, 0, this.inStream.length);	// read bytes from server
+			this.inStream.read(this.bytes, 0, this.bytes.length);	// read bytes from server
 
 			// get header information
-			String headerStr = new String(this.inStream, Charset.forName("UTF-8"));
+			String headerStr = new String(this.bytes, Charset.forName("UTF-8"));
 			String[] headerStrArray = headerStr.split("\r\n");
 
 			// parse header information and write the file
 			if (headerStrArray[0].contains("DATA 200 OK")) {
-				// parse line for length
 				int fileLength = 0;
+				OutputStream fileOutStream = null;				// buffer used to write blocks of the file to
+				String fileAbsPath = this.rootDir + destDir;	// construct the destination path string
+				Path filePath = Paths.get(fileAbsPath);			// convert string to Path object to make a file
 				for (String s : headerStrArray[1].split(" ")) {
 					try {
 						fileLength = Integer.parseInt(s);
@@ -115,22 +118,23 @@ public class Client {
 						continue;	// keep going if result is not a number
 					}
 				}
+				System.out.println("Original File Length: " + fileLength);
 				if (fileLength == 0){ // if fileLength is still 0, either no file was retrieved or problem with header
 					System.out.println("Error: file length was zero...no file retrieved ?");
 					return false;
 				}
 				else { // fileLength was some positive number so we can make a file
-					this.socket.getInputStream().read(this.inStream, 0, fileLength);	// read bytes from server into inStream
-					byte[] tmp = Arrays.copyOf(this.inStream, fileLength);				// copy part of inStream to tmp buffer
-
-					// write the file
-					String fileAbsPath = this.rootDir + destDir;	// construct the destination path string
-					Path filePath = Paths.get(fileAbsPath);			// convert string to Path object to make a file
+					int length;	// length of the current stream being read; this changes for each read
+					fileOutStream = new FileOutputStream(fileAbsPath);    // initialize the file stream
+					while ( (fileLength > 0) && (length = this.inStream.read(this.bytes)) != -1) {
+						fileOutStream.write(this.bytes, 0, length);		// write "length" # of bytes to file
+						fileLength -= length;	// count down the number of bytes we need to read because the client will hang otherwise
+					}
 					try {
-						Files.write(filePath, tmp);					// write the file
 						System.out.println("File copied successfully");
-					} catch (Exception e){
-						System.out.println("Error: Problem writing file");
+						fileOutStream.close();
+					} catch (Exception e) {
+						System.out.println("Error: Problem closing file");
 						e.printStackTrace();
 						return false;
 					}
@@ -140,7 +144,7 @@ public class Client {
 				System.out.println("Error getting file");
 				return false;
 			}
-		} catch (IOException e) {
+		} catch (Exception e) {
 			System.out.println("Error: Problem with get method");
 			e.printStackTrace();
 			return false;
@@ -162,7 +166,7 @@ public class Client {
 			this.outStream.close();
 			// added these null statements because this function wasn't closing properly with just the above 4 lines
 			this.socket = null;
-			this.inStream = null;
+			this.bytes = null;
 			this.outStream = null;
 		} catch (IOException e) {
 			System.out.println("Error: writing CLOSE command to server buffer failed");
@@ -185,9 +189,9 @@ public class Client {
 		// Variable declaration and init
 		Scanner in = new Scanner(System.in);	// local input from client side to be sent to server
 		String inputStr;
-		Client c = null;
+		Client c = null;						// Client object to connect to FileServer
 		try {
-			c = new Client(args[0]);
+			c = new Client(args[0]);			// init Client with directory to use as rootDir
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
@@ -231,7 +235,7 @@ public class Client {
 				}
 				else {
 					c.get(inputArgs[1], inputArgs[2]);
-					Arrays.fill(c.inStream, (byte)0);
+					Arrays.fill(c.bytes, (byte)0);
 				}
 			}
 
