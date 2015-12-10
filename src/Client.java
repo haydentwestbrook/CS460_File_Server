@@ -97,6 +97,22 @@ public class Client {
 	 *****************************************************************/
 	public boolean get(String sourceDir, String destDir){
 
+		String fileAbsPath = this.rootDir + destDir;		// construct the destination path string
+		Path filePath = Paths.get(fileAbsPath);             // convert string to Path object to make a file
+		OutputStream fileOutStream = null;					// buffer used to write blocks of the file to
+		// first check that the destination directory exists before trying to get file from server
+		try {
+			fileOutStream = new FileOutputStream(fileAbsPath);    // initialize the file stream
+		} catch (FileNotFoundException e) {
+			System.out.println("Error: the destination path does not exist. Make sure you specify the name of the destination file");
+			try {
+				this.outStream.flush();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+			return false;
+		}
+		// get the file from the server
 		try {
 			this.outStream.writeBytes("GET " + sourceDir + " \r\n"); // send command to server to get file
 			this.inStream.read(this.bytes, 0, this.bytes.length);	// read bytes from server
@@ -108,9 +124,6 @@ public class Client {
 			// parse header information and write the file
 			if (headerStrArray[0].contains("DATA 200 OK")) {
 				int fileLength = 0;
-				OutputStream fileOutStream = null;				// buffer used to write blocks of the file to
-				String fileAbsPath = this.rootDir + destDir;	// construct the destination path string
-				Path filePath = Paths.get(fileAbsPath);			// convert string to Path object to make a file
 				for (String s : headerStrArray[1].split(" ")) {
 					try {
 						fileLength = Integer.parseInt(s);
@@ -125,7 +138,6 @@ public class Client {
 				}
 				else { // fileLength was some positive number so we can make a file
 					int length;	// length of the current stream being read; this changes for each read
-					fileOutStream = new FileOutputStream(fileAbsPath);    // initialize the file stream
 					while ( (fileLength > 0) && (length = this.inStream.read(this.bytes)) != -1) {
 						fileOutStream.write(this.bytes, 0, length);		// write "length" # of bytes to file
 						fileLength -= length;	// count down the number of bytes we need to read because the client will hang otherwise
@@ -135,13 +147,14 @@ public class Client {
 						fileOutStream.close();
 					} catch (Exception e) {
 						System.out.println("Error: Problem closing file");
+                        fileOutStream.close();
 						e.printStackTrace();
 						return false;
 					}
 				}
 			}
 			else { // DATA 404 was returned
-				System.out.println("Error getting file");
+				System.out.println("Error: The file was not found on the server");
 				return false;
 			}
 		} catch (Exception e) {
@@ -182,7 +195,7 @@ public class Client {
 	public static void main(String[] args) {
 		// Check argument passed in by user. args[0] should be local root directory for client.
 		if (args.length > 1 || args.length == 0){
-			System.out.println("Error: Program takes 1 argument");
+			System.out.println("Error: Program takes 1 argument: The root directory of client (no trailing slash)");
 			return;
 		}
 		System.out.println(args[0]);
@@ -193,7 +206,9 @@ public class Client {
 		try {
 			c = new Client(args[0]);			// init Client with directory to use as rootDir
 		} catch (FileNotFoundException e) {
+			System.out.println("Error: The root directory specified does not exist");
 			e.printStackTrace();
+			return;
 		}
 
 		/******************************************************
@@ -235,7 +250,6 @@ public class Client {
 				}
 				else {
 					c.get(inputArgs[1], inputArgs[2]);
-					Arrays.fill(c.bytes, (byte)0);
 				}
 			}
 

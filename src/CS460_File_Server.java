@@ -12,7 +12,7 @@ public class CS460_File_Server {
 	public static int MAX_BYTES = 1024*100;	// max bytes to be able to send at once over socket
 
     //public static String root = "/home/hayden/Desktop/";
-	public static String root = "G:\\Desktop\\file_server";
+	public static String root = "/home/mike/Desktop/file_server";
 
     public static void main(String[] args) {
 
